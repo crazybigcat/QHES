@@ -33,13 +33,10 @@ for nn in range(20):
 ham = pf.generate_hamiltonian(n_phi, 'MaxCut', para)
 # ham = ham / (n_phi - 1)
 
-eigv = eigh(ham, eigvals_only=True)
-# print(eigv)
-zoom = (eigv[-1] - eigv[0])/(range_value[1] - range_value[0])
-shift = range_value[0] * zoom - eigv[0]
+eigv0 = -5
+zoom = (len(para) - eigv0)/(range_value[1] - range_value[0])
+shift = range_value[0] * zoom - eigv0
 ham = (ham + shift * np.eye(2 ** n_phi)) / zoom
-eigv0, eigs = eigh(ham)
-right_state = tc.tensor(eigs[:, 0]).to(device).to(dtype).reshape(-1)
 
 for nn_fre in list(range(6, 8, 1)):
 
@@ -65,12 +62,12 @@ for nn_fre in list(range(6, 8, 1)):
 
     # initialize state
 
-    init_gate = tc.from_numpy(eigs).to(device).to(dtype)
+    # init_gate = tc.from_numpy(eigs).to(device).to(dtype)
     unitary = Gate.time_evolution(ham_cal, 1, device=device, dtype=dtype)
 
     init_circuit = Circuit.Circuit(n_qubit, device=device, dtype=dtype)
     init_circuit.hadamard(position_phi)
-    init_circuit.add_single_gate(init_gate, position_phi)
+    # init_circuit.add_single_gate(init_gate, position_phi)
     init_circuit.qdc(unitary, position_phi, position_coin, position_f, n_f=n_dirac, inverse=False)
     oracle_circuit = Circuit.Circuit(n_qubit, device=device, dtype=dtype)
     oracle_circuit.not_gate(position_coin)
@@ -93,7 +90,8 @@ for nn_fre in list(range(6, 8, 1)):
             ratio = num_right / n_shots
             # print(ratio)
             if ratio > 0.1:
-                print(counted_res)
+                for kk in counted_res.keys():
+                    print(kk[:n_phi], counted_res[kk])
                 break
         a.circuit.compose(oracle_circuit)
         a.circuit.compose(init_circuit, inverse=True)
@@ -104,6 +102,7 @@ for nn_fre in list(range(6, 8, 1)):
         a.simulate()
         res = a.sampling(n_shots, if_print=False)
         counted_res = a.count_sample(res, '0', position_coin, if_print=False)
-        print(counted_res)
+        for kk in counted_res.keys():
+            print(kk[:n_phi], counted_res[kk])
     end = time.time()
     print(str(device) + ' torch consume ' + str(end - start) + ' seconds, ' + str(dtype))

@@ -30,23 +30,23 @@ for nn_phi in list(range(6, 7, 1)):
     para = ((0, 1), (1, 2), (1, 3), (1, 4), (2, 4), (0, 5), (3, 5))
 
     ham = pf.generate_hamiltonian(n_phi, 'MaxCut', para)
+    eigv, _ = eigh(ham)
     # ham = ham / (n_phi - 1)
 
-    eigv = eigh(ham, eigvals_only=True)
-    zoom = (eigv[-1] - eigv[0])/(range_value[1] - range_value[0])
-    shift = range_value[0] * zoom - eigv[0]
+    zoom = 2*len(para)/(range_value[1] - range_value[0])
+    shift = range_value[0] * zoom - (-len(para))
     ham = (ham + shift * np.eye(2 ** n_phi)) / zoom
-    eigv0, eigs = eigh(ham)
 
 
-    for nn_qpe in list(range(6, 8, 1)):
+
+    for nn_qpe in list(range(5, 8, 1)):
 
         n_qpe = nn_qpe
+
         # initialize repetition numbers
         n_dirac = wf.get_x_qpe(n_phi)
         w = wf.get_m_qpe(n_phi)
         n_repeat = int(np.pi / (4 * np.arcsin(2 ** (-n_phi / 2))) - 1 / 2)
-        # n_repeat = int(np.pi / (2 * np.arcsin(2 ** (-n_phi / 2))) - 1)
         n_fre = round(np.log2(2*n_dirac + 1)) + 1
 
         n_qubit = n_phi + n_qpe + n_fre
@@ -69,16 +69,12 @@ for nn_phi in list(range(6, 7, 1)):
         n_iter = 0
 
         while abs(guess_shift0 - guess_shift1) > acc:
-            flag = 0
+            flag = False
             # w = 1
             for ww in range(w):
-                # ww = 3
-                # guess_shift = 0.15
+
                 ham_cal = ham + ww * np.eye(2 ** n_phi) / ((2 ** (n_qpe + 1)) * w)
                 ham_cal = ham_cal + guess_shift * np.eye(2 ** n_phi)
-
-                # eigs00 = eigh(ham_cal, eigvals_only=True)
-                # print(eigs00)
 
                 ham_cal = ham_cal * 2 * np.pi
                 ham_cal = tc.from_numpy(ham_cal).to(device).to(dtype)
@@ -86,16 +82,8 @@ for nn_phi in list(range(6, 7, 1)):
                 a = Simulator.SimulatorProcess(n_qubit, device=device, dtype=dtype)
                 unitary = Gate.time_evolution(ham_cal, 1, device=device, dtype=dtype)
 
-                # initialize state
-
-                init_gate = tc.from_numpy(eigs).to(device).to(dtype)
-
-                # n_repeat = 0
-                # print(n_repeat)
-
                 for nn in range(n_repeat):
                     a.circuit.hadamard(position_phi)
-                    a.circuit.add_single_gate(init_gate, position_phi, inverse=False)
                     a.circuit.qhc(unitary, position_phi, position_qpe, position_f, n_f=n_dirac, control=None, inverse=False)
                     if nn in n_check:
                         a.simulate()
@@ -103,47 +91,37 @@ for nn_phi in list(range(6, 7, 1)):
                         right_str = '0' * n_fre
                         num = res[right_str]
                         if num / n_shots > 0.1:
-                            # print(num/n_shots)
-                            flag = 1
-                            # print('flag')
+                            flag = True
                             break
                     a.circuit.not_gate(position_f)
                     a.circuit.phase_shift(np.pi, [position_f[0]], control=position_f[1:])
                     a.circuit.not_gate(position_f)
                     a.circuit.qhc(unitary, position_phi, position_qpe, position_f, n_f=n_dirac, control=None, inverse=True)
-                    a.circuit.add_single_gate(init_gate, position_phi, inverse=True)
                     a.circuit.hadamard(position_phi)
                     a._state = -a.state
                     a.circuit.not_gate(position_phi)
                     a.circuit.phase_shift(np.pi, [position_phi[0]], control=position_phi[1:])
                     a.circuit.not_gate(position_phi)
-                if flag == 1:
+                if flag:
                     break
                 a.circuit.hadamard(position_phi)
-                a.circuit.add_single_gate(init_gate, position_phi, inverse=False)
                 a.circuit.qhc(unitary, position_phi, position_qpe, position_f, n_f=n_dirac, control=None, inverse=False)
                 a.simulate()
                 res = a.sampling(n_shots, position=position_f, if_print=False)
                 right_str = '0' * n_fre
                 num = res[right_str]
                 if num / n_shots > 0.1:
-                    # print(num/n_shots)
-                    flag = 1
-                    # print('flag')
+                    flag = True
                     break
                 del a
-                # print(num / n_shots, w, guess_shift)
-                # print(res)
 
-            if flag == 1:
+            if flag:
                 guess_shift0 = guess_shift
                 guess_shift = (guess_shift1 + guess_shift) / 2
             else:
                 guess_shift1 = guess_shift
                 guess_shift = (guess_shift0 + guess_shift) / 2
-            # print(guess_shift, guess_shift0, guess_shift1, guess_shift0 - guess_shift1)
             n_iter = n_iter + 1
-            # print(guess_shift, 'n_iter=', n_iter)
             guess_value = (0.5 - guess_shift) * zoom - shift
             error = abs(guess_value - eigv[0])
 
